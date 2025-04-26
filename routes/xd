@@ -1,0 +1,67 @@
+    public function get_filtered_products($min_price = null, $max_price = null, $category_id = null, $state = 1, $rating_min = null, $limit = 40, $offset = 0,$query = null) {
+        // Base query
+        $this->db->select('
+            p.id_producto, 
+            p.nombre, 
+            p.descripcion, 
+            p.precio, 
+            p.stock, 
+            v.url_imagen, 
+            v.id_categoria_hija, 
+            v.categoria_hija, 
+            v.id_categoria_padre, 
+            v.categoria_padre, 
+            COALESCE(CAST(AVG(t.calificacion) AS DECIMAL(10,1)), 0) AS promedio_calificacion,  -- Handling null ratings
+            COUNT(t.id_testimonio) AS numero_testimonios
+        ');
+    
+        $this->db->from('productos p');
+        $this->db->join('categorias c', 'p.id_categoria = c.id_categoria', 'left');
+        $this->db->join('testimonios t', 'p.id_producto = t.id_producto', 'left');
+        $this->db->join('vista_productos v', 'p.id_producto = v.id_producto', 'left');
+        if ($query !== null) {
+            // Use group_start() and group_end() to create a nested condition
+    
+            $this->db->group_start();
+            // Search in both product name and description
+            $this->db->like('p.nombre', $query);
+            $this->db->or_like('p.descripcion', $query);
+            $this->db->group_end();
+           
+        }
+        // Apply price filters if both are provided
+        if ($min_price !== null) {
+            $this->db->where('p.precio >=', $min_price);
+        }
+        if ($max_price !== null) {
+            $this->db->where('p.precio <=', $max_price);
+        }
+    
+        // Apply category filter if provided
+        if ($category_id !== null) {
+            $this->db->where('p.id_categoria', $category_id);
+        }
+    
+        // Apply state filter (default to 1 if not provided)
+        $this->db->where('p.estado', $state);
+    
+        // Apply minimum rating filter if provided
+        if ($rating_min !== null) {
+            $this->db->having('promedio_calificacion >=', $rating_min);
+        }
+        
+        // Group by product id to aggregate ratings and testimonials
+        $this->db->group_by('p.id_producto, p.nombre, p.descripcion, p.precio, p.stock, v.url_imagen, v.id_categoria_hija, v.categoria_hija, v.id_categoria_padre, v.categoria_padre');
+        
+        // Apply ordering by price
+        $this->db->order_by('p.precio', 'ASC');
+    
+        // Apply pagination (limit and offset)
+        $this->db->limit($limit, $offset);
+    
+        // Execute the query
+        $query = $this->db->get();
+    
+        // Return the result
+        return $query->result();
+    }
